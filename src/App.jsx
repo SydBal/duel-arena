@@ -1,10 +1,10 @@
-import GameCanvas from './Game';
+import Game from './Game';
 
 function App() {
 
   return (
     <>
-      <GameCanvas/>
+      <Game/>
     </>
   )
 }

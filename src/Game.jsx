@@ -1,9 +1,14 @@
 import { useEffect } from "react"
 import game from "./game/main"
-const App = (props) => {
+import {
+  gameTimeState
+} from "./game/state";
+const Game = (props) => {
   const {
     gameCanvasId = "gameCanvas"
   } = props
+
+  const gameTime = gameTimeState.useValue()
 
   useEffect(() => {
     game.init({
@@ -12,8 +17,13 @@ const App = (props) => {
   }, [])
 
   return (
-    <canvas id={gameCanvasId}/>
+    <>
+      <canvas id={gameCanvasId}/>
+      <div>
+        <p>Time: {gameTime}</p>
+      </div>
+    </>
   )
 }
 
-export default App
+export default Game

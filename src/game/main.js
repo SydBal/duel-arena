@@ -1,3 +1,9 @@
+import {
+  canvasState,
+  canvasContextState,
+  gameTimeState
+} from "./state";
+
 const features = {
   hyperTrails: 0,
   zoomOut: 1,
@@ -13,18 +19,23 @@ const features = {
 
 const drawBackground = () => {
   if (features.hyperTrails) return
+  const canvas = canvasState.get()
+  const canvasContext = canvasContextState.get()
   canvasContext.save()
   canvasContext.fillStyle = "black";
   canvasContext.fillRect(0, 0, canvas.width, canvas.height);
   canvasContext.restore()
 }
 
-const getGameSize = () =>
-  features.zoomOut
+const getGameSize = () => {
+  const canvas = canvasState.get()
+  return features.zoomOut
     ? Math.min(canvas.width, canvas.height)
     : Math.max(canvas.width, canvas.height)
+}
 
 const getGameOffset = () => {
+  const canvas = canvasState.get()
   if (
     features.zoomOut
       ? canvas.width < canvas.height
@@ -49,6 +60,8 @@ const getGameOffset = () => {
 }
 
 const drawCenterRetical = () => {
+  const canvas = canvasState.get()
+  const canvasContext = canvasContextState.get()
   if (!features.drawCenterRetical) return
   canvasContext.save()
   canvasContext.strokeStyle = 'red'
@@ -64,6 +77,7 @@ const drawCenterRetical = () => {
 }
 
 const drawGameGrid = () => {
+  const canvasContext = canvasContextState.get()
   if (!features.drawGameGrid) return
   canvasContext.save()
   canvasContext.strokeStyle = 'red'
@@ -90,12 +104,13 @@ const getScaledFontPixelValue = (scalar = 1) => gameSize * .02 * scalar
 
 const incrementScore = () => !isGameOver && score++
 
-const incrementTime = () => gameTime++
+const incrementTime = () => gameTimeState.set(gameTimeState.get() + 1)
 
 class Menu {
   getSpacer = () => getScaledFontPixelValue(2)
   
   drawBackground() {
+    const canvasContext = canvasContextState.get()
     canvasContext.save()
     canvasContext.fillStyle = 'black'
     canvasContext.globalAlpha = .3
@@ -141,6 +156,8 @@ class StartMenu extends Menu {
     if (!preGame) return
     this.drawBackground()
     const spacer = this.getSpacer()
+    const canvas = canvasState.get()
+    const canvasContext = canvasContextState.get()
     canvasContext.save()
     canvasContext.font = getScaledFont(2);
     canvasContext.fillStyle = 'white';
@@ -161,6 +178,7 @@ class InGameMenu extends Menu {
     if (isGameOver) return
     const spacer = this.getSpacer()
     const padding = spacer / 2
+    const canvasContext = canvasContextState.get()
     canvasContext.save()
     canvasContext.font = getScaledFont();
     canvasContext.fillStyle = 'white';
@@ -168,7 +186,7 @@ class InGameMenu extends Menu {
     canvasContext.textBaseline = 'hanging'
     canvasContext.fillText(`Level ${level}`, padding, padding);
     canvasContext.fillText(`Score: ${score}`, padding, padding + spacer);
-    canvasContext.fillText(`Time: ${gameTime}`, padding, padding + spacer * 2);
+    canvasContext.fillText(`Time: ${gameTimeState.get()}`, padding, padding + spacer * 2);
     canvasContext.restore()
   }
 }
@@ -189,6 +207,8 @@ class EndGameMenu extends Menu {
     if (!isGameOver || preGame) return
     this.drawBackground()
     const spacer = this.getSpacer()
+    const canvas = canvasState.get()
+    const canvasContext = canvasContextState.get()
     canvasContext.save()
     canvasContext.font = getScaledFont(2);
     canvasContext.fillStyle = 'white';
@@ -212,6 +232,8 @@ class PauseMenu extends Menu {
   draw() {
     if (!pause) return
     this.drawBackground()
+    const canvas = canvasState.get()
+    const canvasContext = canvasContextState.get()
     canvasContext.fillStyle = 'white';
     canvasContext.font = getScaledFont(1.5);
     canvasContext.textAlign = 'center'
@@ -258,6 +280,7 @@ class Entity {
 
   draw() {
     const {x, y, speedX, speedY, text, textColor, textScale} = this
+    const canvasContext = canvasContextState.get()
     if (text) {
       canvasContext.save()
       canvasContext.fillStyle = textColor;
@@ -312,6 +335,7 @@ class Ball extends Entity {
 
   draw() {
     const {color, x, y, size, opacity} = this
+    const canvasContext = canvasContextState.get()
     canvasContext.save()
     canvasContext.fillStyle = color
     canvasContext.globalAlpha = opacity
@@ -427,6 +451,7 @@ document.addEventListener('mousedown', (event) => {
   if (!mouseController) mouseController = new MouseController()
   if (!isGameOver) player.controller = mouseController
   mouseController.clicking = true
+  const canvas = canvasState.get()
   mouseController.x = event.pageX / canvas.width
   mouseController.y = event.pageY / canvas.height
 });
@@ -436,6 +461,7 @@ document.addEventListener('mouseup', (event) => {
   if (!mouseController) mouseController = new MouseController()
   if (!isGameOver) player.controller = mouseController
   mouseController.clicking = false
+  const canvas = canvasState.get()
   mouseController.x = event.pageX / canvas.width
   mouseController.y = event.pageY / canvas.height
 });
@@ -445,6 +471,7 @@ document.addEventListener('mousemove', (event) => {
   if (!mouseController) mouseController = new MouseController()
   if (!isGameOver && mouseController.clicking) player.controller = mouseController
   if (mouseController.clicking) {
+    const canvas = canvasState.get()
     mouseController.x = event.pageX / canvas.width,
     mouseController.y = event.pageY / canvas.height
   }
@@ -514,7 +541,7 @@ class AIPlayerBall extends PlayerBall {
   update() {
     super.update()
     if (!(enemies && enemies.length)) return
-    if (!(gameTime % 10 == 0)) return
+    if (!(gameTimeState.get() % 10 == 0)) return
     const closestEnemy = getClosestEnemy()
     if (!closestEnemy) return;
     const angleAwayFromEnemy = getAngleBetweenPoints(player, closestEnemy) + Math.PI;
@@ -748,27 +775,27 @@ const getBallCollisionDetected = (ball1, ball2) => {
 }
 
 const handleLevel = () => {
-  if (gameTime % 1000 === 0 && gameTime !== 0) level++
+  if (gameTimeState.get() % 1000 === 0 && gameTimeState.get() !== 0) level++
 }
 
 const handleSpawnEnemies = () => {
   if (!features.handleSpawnEnemies) return
   if (level === 1) {
-    if ((gameTime % 5) === 0 && enemies.length < 200) {
+    if ((gameTimeState.get() % 5) === 0 && enemies.length < 200) {
       enemies.push(new EnemyBall())
     }
   }
   if (level === 2) {
-    if ((gameTime % 7) === 0 && enemies.length < 200) {
+    if ((gameTimeState.get() % 7) === 0 && enemies.length < 200) {
       spawnEnemyWave(EnemyBall, 3)
     }
   }
   if (level === 3) {
-    if ((gameTime % 5) === 0 && enemies.length < 200) {
+    if ((gameTimeState.get() % 5) === 0 && enemies.length < 200) {
       spawnEnemyWave(EnemyBall, 5)
     }
   }
-  if (level > 3 &&gameTime % (11 - Math.min(10, level)) === 0 && enemies.length < 200) {
+  if (level > 3 &&gameTimeState.get() % (11 - Math.min(10, level)) === 0 && enemies.length < 200) {
     const random = randomIntRange(1, 3)
     switch (random) {
       case 1:
@@ -809,6 +836,7 @@ const draw = () => {
 }
 
 window.addEventListener('resize', () => {
+  const canvas = canvasState.get()
   canvas.height = window.innerHeight
   canvas.width = window.innerWidth
   gameSize = getGameSize()
@@ -828,7 +856,7 @@ const newGame = () => {
   preGame = false
   isGameOver = false
   score = 0
-  gameTime = 0
+  gameTimeState.set(0)
   level = 1
 }
 
@@ -836,7 +864,7 @@ const checkIsGameOver = () => player.health <= 0
 
 const gameOver = () => {
   isGameOver = true
-  gameOverTime = gameTime
+  gameOverTime = gameTimeState.get()
   player.controller = false
   mouseController = false
   pause = false
@@ -847,9 +875,11 @@ const playGame = () => {
   if (!isGameOver && checkIsGameOver()) {
     gameOver()
   }
+  const canvas = canvasState.get()
+  const canvasContext = canvasContextState.get()
   if (features.hyperTrails) {
-    canvasContext.fillStyle = 'rgba(0,0,0,0.1)';
-    canvasContext.fillRect(0,0,canvas.width,canvas.height);
+    canvasContext.fillStyle = 'rgba(0,0,0,0.1)'
+    canvasContext.fillRect(0,0, canvas.width,canvas.height)
   } else {
     canvasContext.clearRect(0,0, canvas.width, canvas.height)
   }
@@ -863,17 +893,16 @@ const playGame = () => {
 const init = ({
   gameCanvasId = 'gameCanvas'
 } = {}) => {
-  canvas = document.getElementById(gameCanvasId)
+  canvasState.set(document.getElementById(gameCanvasId))
+  const canvas = canvasState.get()
   canvas.height = window.innerHeight
   canvas.width = window.innerWidth
-  canvasContext = canvas.getContext('2d')
+  canvasContextState.set(canvas.getContext('2d'))
   gameSize = getGameSize()
   gameOffset = getGameOffset()
   playGame()
 }
 
-let canvas
-let canvasContext
 let gameSize
 let gameOffset
 let idCounter = 0
@@ -881,7 +910,6 @@ let pause = false
 let mouseController = false
 let keysController = false
 let gamepadController = false
-let gameTime = 0
 let score
 let isGameOver = true
 let gameOverTime
