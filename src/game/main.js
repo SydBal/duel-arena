@@ -1,53 +1,3 @@
-const features = {
-  hyperTrails: 0,
-  zoomOut: 1,
-  drawCenterRetical: 0,
-  drawGameGrid: 0,
-  drawEntityVelocityVector: 0,
-  handleSpawnEnemies: 1,
-  handleEnemyOutOfBounds: 1,
-  createExplosion: 1,
-  keysControl: 1,
-  mouseControl: 1,
-}
-
-const drawBackground = () => {
-  if (features.hyperTrails) return
-  canvasContext.save()
-  canvasContext.fillStyle = "black";
-  canvasContext.fillRect(0, 0, canvas.width, canvas.height);
-  canvasContext.restore()
-}
-
-const getGameSize = () =>
-  features.zoomOut
-    ? Math.min(canvas.width, canvas.height)
-    : Math.max(canvas.width, canvas.height)
-
-const getGameOffset = () => {
-  if (
-    features.zoomOut
-      ? canvas.width < canvas.height
-      : canvas.width > canvas.height
-  ) {
-    return {
-      x: 0,
-      y: (gameSize - canvas.height) / 2
-    }
-  }
-  if (
-    features.zoomOut
-     ? canvas.width > canvas.height
-     : canvas.width < canvas.height
-  ) {
-    return {
-      x: (gameSize - canvas.width) / 2,
-      y: 0
-    }
-  }
-  return {x: 0, y: 0}
-}
-
 const drawCenterRetical = () => {
   if (!features.drawCenterRetical) return
   canvasContext.save()
@@ -796,81 +746,10 @@ const update = () => {
   handleSpawnEnemies()
   incrementTime()
 }
- 
-const draw = () => {
-  drawBackground()
-  ;([
-    player,
-    ...enemies,
-    ...shields,
-    ...explosions,
-    ...menus,
-  ]).forEach(entity => entity && entity.draw && entity.draw())
-}
 
-window.addEventListener('resize', () => {
-  canvas.height = window.innerHeight
-  canvas.width = window.innerWidth
-  gameSize = getGameSize()
-  gameOffset = getGameOffset()
-  update()
-  draw()
-})
+
 
 const togglePause = () => pause = !pause
-
-const newGame = () => {
-  player = new PlayerBall()
-  mouseController = false
-  shields = [ new Shield() ]
-  enemies = []
-  explosions = []
-  preGame = false
-  isGameOver = false
-  score = 0
-  gameTime = 0
-  level = 1
-}
-
-const checkIsGameOver = () => player.health <= 0
-
-const gameOver = () => {
-  isGameOver = true
-  gameOverTime = gameTime
-  player.controller = false
-  mouseController = false
-  pause = false
-}
-
-const playGame = () => {
-  handleGamePad()
-  if (!isGameOver && checkIsGameOver()) {
-    gameOver()
-  }
-  if (features.hyperTrails) {
-    canvasContext.fillStyle = 'rgba(0,0,0,0.1)';
-    canvasContext.fillRect(0,0,canvas.width,canvas.height);
-  } else {
-    canvasContext.clearRect(0,0, canvas.width, canvas.height)
-  }
-  if (!pause) {
-    update()
-  }
-  draw()
-  requestAnimationFrame(playGame)
-}
-
-const init = ({
-  gameCanvasId = 'gameCanvas'
-} = {}) => {
-  canvas = document.getElementById(gameCanvasId)
-  canvas.height = window.innerHeight
-  canvas.width = window.innerWidth
-  canvasContext = canvas.getContext('2d')
-  gameSize = getGameSize()
-  gameOffset = getGameOffset()
-  playGame()
-}
 
 let canvas
 let canvasContext
@@ -897,7 +776,3 @@ let menus = [
   new EndGameMenu(),
   new PauseMenu(),
 ]
-
-export default {
-  init
-}
