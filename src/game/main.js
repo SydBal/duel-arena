@@ -1,21 +1,26 @@
 import {
   canvasState,
   canvasContextState,
-  gameTimeState
+  gameTimeState,
+  idCounterState,
+  featuresState,
+  pauseState,
+  gameSizeState,
+  gameOffsetState,
+  scoreState,
+  levelState,
+  isGameOverState,
+  gameOverTimeState,
+  preGameState,
+  mouseControllerState,
+  keysControllerState,
+  gamepadControllerState,
+  playerState,
+  centerState,
+  locationState,
 } from "./state";
 
-const features = {
-  hyperTrails: 0,
-  zoomOut: 1,
-  drawCenterRetical: 0,
-  drawGameGrid: 0,
-  drawEntityVelocityVector: 0,
-  handleSpawnEnemies: 1,
-  handleEnemyOutOfBounds: 1,
-  createExplosion: 1,
-  keysControl: 1,
-  mouseControl: 1,
-}
+const features = featuresState.get()
 
 const drawBackground = () => {
   if (features.hyperTrails) return
@@ -25,17 +30,19 @@ const drawBackground = () => {
   canvasContext.fillStyle = "black";
   canvasContext.fillRect(0, 0, canvas.width, canvas.height);
   canvasContext.restore()
+  drawGameGrid()
 }
 
-const getGameSize = () => {
+const calculateGameSize = () => {
   const canvas = canvasState.get()
   return features.zoomOut
     ? Math.min(canvas.width, canvas.height)
     : Math.max(canvas.width, canvas.height)
 }
 
-const getGameOffset = () => {
+const calculateGameOffset = () => {
   const canvas = canvasState.get()
+  const gameSize = gameSizeState.get()
   if (
     features.zoomOut
       ? canvas.width < canvas.height
@@ -60,9 +67,9 @@ const getGameOffset = () => {
 }
 
 const drawCenterRetical = () => {
+  if (!features.drawCenterRetical) return
   const canvas = canvasState.get()
   const canvasContext = canvasContextState.get()
-  if (!features.drawCenterRetical) return
   canvasContext.save()
   canvasContext.strokeStyle = 'red'
   canvasContext.lineWidth = 3
@@ -77,32 +84,72 @@ const drawCenterRetical = () => {
 }
 
 const drawGameGrid = () => {
-  const canvasContext = canvasContextState.get()
   if (!features.drawGameGrid) return
+  const canvasContext = canvasContextState.get()
+  const gameSize = gameSizeState.get()
+  const gameOffset =  gameOffsetState.get()
+  const location = locationState.get()
+  const center = centerState.get()
+  const player = playerState.get()
   canvasContext.save()
-  canvasContext.strokeStyle = 'red'
   canvasContext.lineWidth = 1
+  // Color change based on distance from center
+  canvasContext.strokeStyle = `hsl(${
+    // Hue (color)
+    // North -> Red (fire)
+    // South -> Blue (water)
+    // East -> Purple (air)
+    // West -> Green (earth)
+    radiansToDegrees(getAngleBetweenPoints(player, center)) - 90
+  } ${
+    // Saturation (grey to color)
+    // Grey in center, full color after 5 screen lengths
+    (Math.abs(location.x) + Math.abs(location.y)) * 20
+  }% ${
+    // Lightness (black to color to white)
+    50
+  }%)` 
   canvasContext.beginPath()
-  // vertical grid lines
-  for (let x = 0; x <= 10; x++) {
-    canvasContext.moveTo(gameSize * x * 0.1 - gameOffset.x, 0 - gameOffset.y)
-    canvasContext.lineTo(gameSize * x * 0.1 - gameOffset.x, gameSize)
-    canvasContext.stroke()
+
+  // Overflow grid, 9x9 total, offset by current location to create infinite grid
+  for(let column = -1 + Math.floor(location.x + .5); column <= 1 + Math.floor(location.x + .5); column++) {
+    for(let row = -1 + Math.floor(-location.y + .5); row <= 1 + Math.floor(-location.y + .5); row++) {
+
+      // vertical grid lines
+      for (let x = 0; x <= 10; x++) {
+        canvasContext.moveTo(
+          gameSize * x * 0.1 - gameOffset.x + (column * gameSize) - (location.x * gameSize),
+          0 - gameOffset.y + (row * gameSize) + (location.y * gameSize)
+        )
+        canvasContext.lineTo(
+          gameSize * x * 0.1 - gameOffset.x + (column * gameSize) - (location.x * gameSize),
+          gameSize - gameOffset.y + (row * gameSize) + (location.y * gameSize)
+        )
+        canvasContext.stroke()
+      }
+      // horizontal grid lines
+      for (let y = 0; y <= 10; y++) {
+        canvasContext.moveTo(
+          0 - gameOffset.x + (column * gameSize) - (location.x * gameSize),
+          gameSize * y * 0.1 - gameOffset.y + (row * gameSize) + (location.y * gameSize)
+        )
+        canvasContext.lineTo(
+          gameSize - gameOffset.x + (column * gameSize) - (location.x * gameSize),
+          gameSize * y * 0.1 - gameOffset.y + (row * gameSize) + (location.y * gameSize)
+        )
+        canvasContext.stroke()
+      }
+    }
   }
-  // horizontal grid lines
-  for (let y = 0; y <= 10; y++) {
-    canvasContext.moveTo(0 - gameOffset.x, gameSize * y * 0.1 - gameOffset.y)
-    canvasContext.lineTo(gameSize, gameSize * y * 0.1 - gameOffset.y)
-    canvasContext.stroke()
-  }
+
   canvasContext.restore()
 }
 
-const getScaledFont = (scalar = 1) => `${gameSize * .02 * scalar}px sans-serif`
+const getScaledFont = (scalar = 1) => `${gameSizeState.get() * .02 * scalar}px sans-serif`
 
-const getScaledFontPixelValue = (scalar = 1) => gameSize * .02 * scalar
+const getScaledFontPixelValue = (scalar = 1) => gameSizeState.get() * .02 * scalar
 
-const incrementScore = () => !isGameOver && score++
+const incrementScore = () => !isGameOverState.get() && scoreState.set(scoreState.get() + 1)
 
 const incrementTime = () => gameTimeState.set(gameTimeState.get() + 1)
 
@@ -111,6 +158,8 @@ class Menu {
   
   drawBackground() {
     const canvasContext = canvasContextState.get()
+    const gameSize = gameSizeState.get()
+    const gameOffset =  gameOffsetState.get()
     canvasContext.save()
     canvasContext.fillStyle = 'black'
     canvasContext.globalAlpha = .3
@@ -142,7 +191,8 @@ class Menu {
 
 class StartMenu extends Menu {
   update() {
-    if (!preGame) return
+    if (!preGameState.get()) return
+    const mouseController = mouseControllerState.get()
     if (
       mouseController
       && mouseController.clicking
@@ -153,7 +203,7 @@ class StartMenu extends Menu {
     ) newGame()
   }
   draw() {
-    if (!preGame) return
+    if (!preGameState.get()) return
     this.drawBackground()
     const spacer = this.getSpacer()
     const canvas = canvasState.get()
@@ -175,10 +225,12 @@ class StartMenu extends Menu {
 
 class InGameMenu extends Menu {
   draw() {
-    if (isGameOver) return
+    if (isGameOverState.get()) return
     const spacer = this.getSpacer()
     const padding = spacer / 2
     const canvasContext = canvasContextState.get()
+    const score = scoreState.get()
+    const level = levelState.get()
     canvasContext.save()
     canvasContext.font = getScaledFont();
     canvasContext.fillStyle = 'white';
@@ -193,7 +245,8 @@ class InGameMenu extends Menu {
 
 class EndGameMenu extends Menu {
   update() {
-    if (!isGameOver || preGame) return
+    if (!isGameOverState.get() || preGameState.get()) return
+    const mouseController = mouseControllerState.get()
     if (
       mouseController
       && mouseController.clicking
@@ -204,11 +257,13 @@ class EndGameMenu extends Menu {
     ) newGame()
   }
   draw() {
-    if (!isGameOver || preGame) return
+    if (!isGameOverState.get() || preGameState.get()) return
     this.drawBackground()
     const spacer = this.getSpacer()
     const canvas = canvasState.get()
     const canvasContext = canvasContextState.get()
+    const score = scoreState.get()
+    const gameOverTime = gameOverTimeState.get()
     canvasContext.save()
     canvasContext.font = getScaledFont(2);
     canvasContext.fillStyle = 'white';
@@ -230,7 +285,7 @@ class EndGameMenu extends Menu {
 
 class PauseMenu extends Menu {
   draw() {
-    if (!pause) return
+    if (!pauseState.get()) return
     this.drawBackground()
     const canvas = canvasState.get()
     const canvasContext = canvasContextState.get()
@@ -251,6 +306,8 @@ const getAngleBetweenPoints = (
   {x: x2, y: y2}
 ) => Math.atan2((y2 - y1), (x2 - x1))
 
+const radiansToDegrees = rad => (rad * 180.0) / Math.PI;
+
 const findOwnIndexInArray = (entity, array) => array.findIndex((element) => element.id === entity.id)
 
 const removeSelfFromArray = (entity, array) => {
@@ -262,7 +319,9 @@ const removeSelfFromArray = (entity, array) => {
 
 class Entity {
   constructor(props = {}) {
-    this.id = ++idCounter
+    const idCounter = idCounterState.get()
+    this.id = idCounter
+    idCounterState.set(idCounter + 1)
     this.createdDate = new Date()
     this.x = props.x !== undefined ? props.x : .5
     this.y = props.y !== undefined ? props.y : .5
@@ -281,6 +340,8 @@ class Entity {
   draw() {
     const {x, y, speedX, speedY, text, textColor, textScale} = this
     const canvasContext = canvasContextState.get()
+    const gameSize = gameSizeState.get()
+    const gameOffset =  gameOffsetState.get()
     if (text) {
       canvasContext.save()
       canvasContext.fillStyle = textColor;
@@ -336,6 +397,8 @@ class Ball extends Entity {
   draw() {
     const {color, x, y, size, opacity} = this
     const canvasContext = canvasContextState.get()
+    const gameSize = gameSizeState.get()
+    const gameOffset =  gameOffsetState.get()
     canvasContext.save()
     canvasContext.fillStyle = color
     canvasContext.globalAlpha = opacity
@@ -362,7 +425,7 @@ class PlayerBall extends Ball {
   }
   update() {
     this.text = this.health
-    if (isGameOver) {
+    if (isGameOverState.get()) {
       this.size = 0
       this.color = 'black'
       this.text = undefined
@@ -377,7 +440,13 @@ class KeysController {}
 
 document.addEventListener('keydown', (event) => {
   if (!features.keysControl) return
-  if (!keysController) keysController = new KeysController()
+  let keysController = keysControllerState.get()
+  if (!keysController) {
+    keysControllerState.set(new KeysController())
+    keysController = keysControllerState.get()
+  }
+  const isGameOver = isGameOverState.get()
+  const player = playerState.get()
   switch (event.key) {
     case "ArrowUp":
     case "w":
@@ -414,8 +483,14 @@ document.addEventListener('keydown', (event) => {
 })
 
 document.addEventListener('keyup', (event) => {
+  const isGameOver = isGameOverState.get()
   if (!features.keysControl) return
-  if (!keysController) keysController = new KeysController()
+  let keysController = keysControllerState.get()
+  if (!keysController) {
+    keysControllerState.set(new KeysController())
+    keysController = keysControllerState.get()
+  }
+  const player = playerState.get()
   switch (event.key) {
     case "ArrowUp":
     case "w":
@@ -444,12 +519,20 @@ document.addEventListener('keyup', (event) => {
   }
 })
 
-class MouseController {}
+class MouseController {
+  constructor() {
+    this.clicking = false
+  }
+}
 
 document.addEventListener('mousedown', (event) => {
   if (!features.mouseControl) return
-  if (!mouseController) mouseController = new MouseController()
-  if (!isGameOver) player.controller = mouseController
+  let mouseController = mouseControllerState.get()
+  if (!mouseController) {
+    mouseController = new MouseController()
+    mouseControllerState.set(mouseController)
+  }
+  if (!isGameOverState.get()) playerState.get().controller = mouseController
   mouseController.clicking = true
   const canvas = canvasState.get()
   mouseController.x = event.pageX / canvas.width
@@ -458,8 +541,12 @@ document.addEventListener('mousedown', (event) => {
 
 document.addEventListener('mouseup', (event) => {
   if (!features.mouseControl) return
-  if (!mouseController) mouseController = new MouseController()
-  if (!isGameOver) player.controller = mouseController
+  let mouseController = mouseControllerState.get()
+  if (!mouseController) {
+    mouseController = new MouseController()
+    mouseControllerState.set(mouseController)
+  }
+  if (!isGameOverState.get()) playerState.get().controller = mouseController
   mouseController.clicking = false
   const canvas = canvasState.get()
   mouseController.x = event.pageX / canvas.width
@@ -468,8 +555,12 @@ document.addEventListener('mouseup', (event) => {
 
 document.addEventListener('mousemove', (event) => {
   if (!features.mouseControl) return
-  if (!mouseController) mouseController = new MouseController()
-  if (!isGameOver && mouseController.clicking) player.controller = mouseController
+  let mouseController = mouseControllerState.get()
+  if (!mouseController) {
+    mouseController = new MouseController()
+    mouseControllerState.set(mouseController)
+  }
+  if (!isGameOverState.get() && mouseController.clicking) playerState.get().controller = mouseController
   if (mouseController.clicking) {
     const canvas = canvasState.get()
     mouseController.x = event.pageX / canvas.width,
@@ -482,7 +573,8 @@ class GamepadController {}
 window.addEventListener("gamepadconnected", (e) => {
   const connectedGamepad = navigator.getGamepads()[e.gamepad.index]
   console.log("Gamepad connected.", connectedGamepad);
-  gamepadController = new GamepadController()
+  gamepadControllerState.set(new GamepadController())
+  const gamepadController = gamepadControllerState.get()
   gamepadController.index = e.gamepad.index
   gamepadController.axes = connectedGamepad.axes
   gamepadController.buttons = connectedGamepad.buttons
@@ -490,10 +582,11 @@ window.addEventListener("gamepadconnected", (e) => {
 
 window.addEventListener("gamepaddisconnected", (e) => {
   console.log("Gamepad disconnected.", e);
-  if (e.gamepad.index === gamepadController.index) gamepadController = false
+  if (e.gamepad.index === gamepadControllerState.get().index) gamepadControllerState.set(undefined)
 });
 
 const handleGamePad = () => {
+  const gamepadController = gamepadControllerState.get()
   if (gamepadController) {
     const currentGamepad = navigator.getGamepads()[0]
     if (
@@ -502,7 +595,7 @@ const handleGamePad = () => {
     ) return
     gamepadController.axes = currentGamepad.axes
     gamepadController.buttons = currentGamepad.buttons
-    if (!isGameOver) {
+    if (!isGameOverState.get()) {
       if (
         gamepadController.axes[0] > 0.25
         || gamepadController.axes[0] < -0.25
@@ -515,13 +608,14 @@ const handleGamePad = () => {
         gamepadController.x = 0
         gamepadController.y = 0
       }
-      player.controller = gamepadController
+      playerState.get().controller = gamepadController
     }
   }
 }
 
 
 const getClosestEnemy = () => {
+  const player = playerState.get()
   return enemies.length && enemies.reduce((enemyA, enemyB) => {
     enemyA.distanceToPlayer = enemyA.distanceToPlayer || getDistanceBetweenEntityCenters(player, enemyA)
     enemyB.distanceToPlayer = getDistanceBetweenEntityCenters(player, enemyB)
@@ -544,7 +638,7 @@ class AIPlayerBall extends PlayerBall {
     if (!(gameTimeState.get() % 10 == 0)) return
     const closestEnemy = getClosestEnemy()
     if (!closestEnemy) return;
-    const angleAwayFromEnemy = getAngleBetweenPoints(player, closestEnemy) + Math.PI;
+    const angleAwayFromEnemy = getAngleBetweenPoints(playerState.get(), closestEnemy) + Math.PI;
     this.controller.clicked = true,
     this.controller.x = Math.cos(angleAwayFromEnemy)
     this.controller.y = Math.sin(angleAwayFromEnemy)
@@ -552,27 +646,31 @@ class AIPlayerBall extends PlayerBall {
 }
 
 const moveBasedOnKeyBoard = (entity) => {
+  const player = playerState.get()
   if (
     player.controller instanceof KeysController
   ) {
+    const keysController = keysControllerState.get()
     entity.x += (keysController.right ? -player.speed : 0) + (keysController.left ? player.speed : 0)
     entity.y += (keysController.down ? -player.speed : 0) + (keysController.up ? player.speed : 0)
   }
 }
 
-const moveBasedOnMouse = (ball) => {
+const moveBasedOnMouse = (entity) => {
+  const player = playerState.get()
   if (
     player.controller instanceof MouseController
   ) {
     const distanceToPlayer = getDistanceBetweenEntityCenters(player.controller, player)
     if (distanceToPlayer <= player.size) return
     const angleToMouse = getAngleBetweenPoints(player, player.controller)
-    ball.x -= player.speed * Math.cos(angleToMouse)
-    ball.y -= player.speed * Math.sin(angleToMouse)
+    entity.x -= player.speed * Math.cos(angleToMouse)
+    entity.y -= player.speed * Math.sin(angleToMouse)
   }
 }
 
-const moveBasedOnGamepad = (ball) => {
+const moveBasedOnGamepad = (entity) => {
+  const player = playerState.get()
   if (
     player.controller instanceof GamepadController
   ) {
@@ -582,8 +680,26 @@ const moveBasedOnGamepad = (ball) => {
     const relativeX = player.controller.x + player.x
     const relativeY = player.controller.y + player.y
     const angleToGamepad = getAngleBetweenPoints(player, {x:relativeX, y:relativeY})
-    ball.x -= player.speed * Math.cos(angleToGamepad)
-    ball.y -= player.speed * Math.sin(angleToGamepad)
+    entity.x -= player.speed * Math.cos(angleToGamepad)
+    entity.y -= player.speed * Math.sin(angleToGamepad)
+  }
+}
+
+class MovableEntity extends Entity {
+  update() {
+    super.update()
+    moveBasedOnKeyBoard(this)
+    moveBasedOnMouse(this)
+    moveBasedOnGamepad(this) 
+  }
+}
+
+class MovableBall extends Ball {
+  update() {
+    super.update()
+    moveBasedOnKeyBoard(this)
+    moveBasedOnMouse(this)
+    moveBasedOnGamepad(this) 
   }
 }
 
@@ -601,13 +717,15 @@ const handleEnemyOutOfBounds = (enemy) => {
 }
 
 const handleEnemyCollisions = (enemy) => {
-  const collisionWithPlayer = getBallCollisionDetected(enemy, player)
+  const collisionWithPlayer = getBallCollisionDetected(enemy, playerState.get())
   const collisionWithShield = shields.some(shield => getBallCollisionDetected(enemy, shield))
   if (collisionWithPlayer || collisionWithShield) {
     removeSelfFromArray(enemy, enemies)
     if (collisionWithPlayer) {
       createExplosion({x:collisionWithPlayer.x , y:collisionWithPlayer.y, size: enemy.size})
-      player.health -= 1
+      if(!features.noDamage) {
+        playerState.get().health -= 1
+      }
     }
     if (collisionWithShield) {
       createExplosion({x:enemy.x , y:enemy.y, size: enemy.size,color: enemy.color})
@@ -633,21 +751,17 @@ const setRandomLocationOnEdge = (entity) => {
   }
 }
 
-class EnemyBall extends Ball {
+class EnemyBall extends MovableBall {
   constructor(props = {}) {
     super(props)
     this.color = 'darkred'
     this.size = 0.02
     if (props.x === undefined && props.y === undefined) setRandomLocationOnEdge(this)
-    if (props.speedX === undefined  && props.speedY === undefined) setSpeedTowardsTarget(this, player, .003)
+    if (props.speedX === undefined  && props.speedY === undefined) setSpeedTowardsTarget(this, playerState.get(), .003)
   }
 
   update(){
-    this.x += this.speedX
-    this.y += this.speedY
-    moveBasedOnKeyBoard(this)
-    moveBasedOnMouse(this)
-    moveBasedOnGamepad(this)
+    super.update()
     handleEnemyOutOfBounds(this)
     handleEnemyCollisions(this)
   }
@@ -655,6 +769,7 @@ class EnemyBall extends Ball {
 
 const spawnEnemyWave = (EnemyType = EnemyBall, nEnemies = 5, angle, enemyProps) => {
   const originEnemy = new EnemyType({...enemyProps})
+  const player = playerState.get()
   const wave = [originEnemy]
   for (let i = 0; i < nEnemies - 1; i++) {
     const odd = i % 2
@@ -696,7 +811,7 @@ class SmartEnemyBall extends EnemyBall {
   }
   update() {
     super.update()
-    setSpeedTowardsTarget(this, player, getPythagorean(this.speedX, this.speedY))
+    setSpeedTowardsTarget(this, playerState.get(), getPythagorean(this.speedX, this.speedY))
   }
 }
 
@@ -745,6 +860,7 @@ class Shield extends Ball {
     this.speed = 1
   }
   update() {
+    const level = levelState.get()
     this.angle += Math.PI / (100 / Math.min(level, 11)) * this.speed
     this.x = .5 + (this.distanceFromCenter * Math.cos(this.angle))
     this.y = .5 + (this.distanceFromCenter * Math.sin(this.angle))
@@ -775,10 +891,20 @@ const getBallCollisionDetected = (ball1, ball2) => {
 }
 
 const handleLevel = () => {
-  if (gameTimeState.get() % 1000 === 0 && gameTimeState.get() !== 0) level++
+  if (gameTimeState.get() % 1000 === 0 && gameTimeState.get() !== 0) levelState.set(levelState.get() +1)
+}
+
+const handleLocation = () => {
+  const center = centerState.get()
+  center.update()
+  locationState.set({
+    x: -center.x + 0.5,
+    y: center.y - 0.5,
+  })
 }
 
 const handleSpawnEnemies = () => {
+  const level = levelState.get()
   if (!features.handleSpawnEnemies) return
   if (level === 1) {
     if ((gameTimeState.get() % 5) === 0 && enemies.length < 200) {
@@ -795,7 +921,7 @@ const handleSpawnEnemies = () => {
       spawnEnemyWave(EnemyBall, 5)
     }
   }
-  if (level > 3 &&gameTimeState.get() % (11 - Math.min(10, level)) === 0 && enemies.length < 200) {
+  if (level > 3 && gameTimeState.get() % (11 - Math.min(10, level)) === 0 && enemies.length < 200) {
     const random = randomIntRange(1, 3)
     switch (random) {
       case 1:
@@ -813,8 +939,9 @@ const handleSpawnEnemies = () => {
 
 const update = () => {
   handleLevel()
+  handleLocation()
   ;([
-    player,
+    playerState.get(),
     ...shields,
     ...enemies,
     ...explosions,
@@ -825,9 +952,11 @@ const update = () => {
 }
  
 const draw = () => {
+  // Always draw background
   drawBackground()
+  drawCenterRetical()
   ;([
-    player,
+    playerState.get(),
     ...enemies,
     ...shields,
     ...explosions,
@@ -839,40 +968,42 @@ window.addEventListener('resize', () => {
   const canvas = canvasState.get()
   canvas.height = window.innerHeight
   canvas.width = window.innerWidth
-  gameSize = getGameSize()
-  gameOffset = getGameOffset()
+  gameSizeState.set(calculateGameSize())
+  gameOffsetState.set(calculateGameOffset())
   update()
   draw()
 })
 
-const togglePause = () => pause = !pause
+const togglePause = () => pauseState.set(!pauseState.get())
 
 const newGame = () => {
-  player = new PlayerBall()
-  mouseController = false
+  playerState.set(new PlayerBall())
+  centerState.set(new MovableEntity())
+  locationState.set({x:0, y:0})
+  mouseControllerState.set(undefined)
   shields = [ new Shield() ]
   enemies = []
   explosions = []
-  preGame = false
-  isGameOver = false
-  score = 0
+  preGameState.set(false)
+  scoreState.set(0)
   gameTimeState.set(0)
-  level = 1
+  levelState.set(1)
+  isGameOverState.set(false)
 }
 
-const checkIsGameOver = () => player.health <= 0
+const checkIsGameOver = () => playerState.get().health <= 0
 
 const gameOver = () => {
-  isGameOver = true
-  gameOverTime = gameTimeState.get()
-  player.controller = false
-  mouseController = false
-  pause = false
+  gameOverTimeState.set(gameTimeState.get())
+  playerState.get().controller = false
+  mouseControllerState.set(undefined)
+  pauseState.set(false)
+  isGameOverState.set(true)
 }
 
 const playGame = () => {
   handleGamePad()
-  if (!isGameOver && checkIsGameOver()) {
+  if (!isGameOverState.get() && checkIsGameOver()) {
     gameOver()
   }
   const canvas = canvasState.get()
@@ -883,7 +1014,7 @@ const playGame = () => {
   } else {
     canvasContext.clearRect(0,0, canvas.width, canvas.height)
   }
-  if (!pause) {
+  if (!pauseState.get()) {
     update()
   }
   draw()
@@ -898,24 +1029,14 @@ const init = ({
   canvas.height = window.innerHeight
   canvas.width = window.innerWidth
   canvasContextState.set(canvas.getContext('2d'))
-  gameSize = getGameSize()
-  gameOffset = getGameOffset()
+  gameSizeState.set(calculateGameSize())
+  gameOffsetState.set(calculateGameOffset())
+  playerState.set(new AIPlayerBall())
+  centerState.set(new MovableEntity())
+  locationState.set({x:0, y:0})
   playGame()
 }
 
-let gameSize
-let gameOffset
-let idCounter = 0
-let pause = false
-let mouseController = false
-let keysController = false
-let gamepadController = false
-let score
-let isGameOver = true
-let gameOverTime
-let preGame = true
-let level = 3
-let player = new AIPlayerBall()
 let shields = []
 let enemies = []
 let explosions = []

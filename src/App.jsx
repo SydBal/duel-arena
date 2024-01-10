@@ -1,10 +1,12 @@
-import Game from './Game';
+import Game from './game/Game';
+import DebugMenu from './game/DebugMenu';
 
 function App() {
 
   return (
     <>
       <Game/>
+      <DebugMenu/>
     </>
   )
 }
